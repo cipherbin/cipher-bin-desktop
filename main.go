@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+
 	"fyne.io/fyne"
 	"fyne.io/fyne/app"
 	"fyne.io/fyne/layout"
@@ -16,18 +18,21 @@ func main() {
 	encryptForm.ExtendBaseWidget(encryptForm)
 	encryptForm.AppendItem(&widget.FormItem{
 		Text:   "message",
-		Widget: widget.NewTextGridFromString("TODO: text input"),
+		Widget: widget.NewEntry(),
 	})
 
 	decryptForm := &widget.Form{BaseWidget: widget.BaseWidget{}, Items: []*widget.FormItem{}}
 	decryptForm.ExtendBaseWidget(decryptForm)
 	decryptForm.AppendItem(&widget.FormItem{
 		Text:   "message url",
-		Widget: widget.NewTextGridFromString("TODO: text input"),
+		Widget: widget.NewEntry(),
 	})
 
-	encryptContainer := fyne.NewContainerWithLayout(layout.NewGridLayout(1), encryptForm)
-	decryptContainer := fyne.NewContainerWithLayout(layout.NewGridLayout(1), decryptForm)
+	encryptButton := widget.NewButton("encrypt", func() { log.Println("encrypt clicked") })
+	decryptButton := widget.NewButton("decrypt", func() { log.Println("decrypt clicked") })
+
+	encryptContainer := fyne.NewContainerWithLayout(layout.NewGridLayout(1), encryptForm, encryptButton)
+	decryptContainer := fyne.NewContainerWithLayout(layout.NewGridLayout(1), decryptForm, decryptButton)
 
 	tabs := widget.NewTabContainer(
 		&widget.TabItem{
