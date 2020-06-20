@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"fyne.io/fyne"
@@ -72,11 +73,7 @@ func main() {
 		}()
 		fmt.Printf("encryptInput.Text: %s\n", encryptInput.Text)
 
-		// Create a v4 uuid for message identification and to eliminate
-		// almost any chance of stumbling upon the url
 		uuidv4 := uuid.NewV4().String()
-
-		// Generate a random 32 byte string
 		key := randstring.New(32)
 
 		// Encrypt the message using AES-256
@@ -98,9 +95,54 @@ func main() {
 	}
 
 	decryptForm.OnSubmit = func() {
+		defer func() {
+			decryptInput.Text = ""
+			decryptContainer.Refresh()
+		}()
 		fmt.Printf("decryptInput.Text: %s\n", decryptInput.Text)
-		decryptInput.Text = ""
-		decryptContainer.Refresh()
+
+		url := decryptInput.Text
+		if !validURL(url, webBaseURL) {
+			fmt.Println("sorry, this message has either already been viewed and destroyed or it never existed at all")
+			os.Exit(1)
+			return
+		}
+
+		// If we've gotten here, the open in browser flag was not provided, so we
+		// replace the browser url with the api url to fetch the message here
+		url = strings.Replace(url, webBaseURL, apiBaseURL, -1)
+
+		encryptedMsg, err := binClient.GetMessage(url)
+		if err != nil {
+			fmt.Printf("error fetching message: %+v\n", err)
+			os.Exit(1)
+			return
+		}
+
+		var key string
+
+		// Ensure we have what looks like an AES key and set the key var if so
+		urlParts := strings.Split(url, ";")
+		if len(urlParts) == 2 {
+			key = urlParts[1]
+		}
+
+		// Length of urlParts != 2. In other words, if it's an invalid link.
+		if key == "" {
+			fmt.Printf("sorry, it seems you have an invalid link: %+v", err)
+			os.Exit(1)
+			return
+		}
+
+		// Decrypt the message returned from APIClient.GetMessage
+		plainTextMsg, err := aes256.Decrypt(encryptedMsg.Message, key)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		// Print the decrypted message to the terminal
+		fmt.Println(plainTextMsg)
 	}
 
 	encryptForm.Refresh()
@@ -110,9 +152,10 @@ func main() {
 	w.ShowAndRun()
 }
 
-// TODO:
-// - Actually submit data to the api
-// - Size things better
+// validURL takes a string url and checks whether it's a valid cipherb.in link
+func validURL(url, apiBaseURL string) bool {
+	return strings.HasPrefix(url, fmt.Sprintf("%s/msg?bin=", apiBaseURL))
+}
 
 func (c *cipherbin) MinSize(objects []fyne.CanvasObject) fyne.Size {
 	w, h := 400, 400
