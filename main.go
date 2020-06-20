@@ -2,11 +2,21 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	"os"
+	"time"
 
 	"fyne.io/fyne"
 	"fyne.io/fyne/app"
 	"fyne.io/fyne/layout"
 	"fyne.io/fyne/widget"
+
+	"github.com/cipherbin/cipher-bin-cli/pkg/aes256"
+	"github.com/cipherbin/cipher-bin-cli/pkg/api"
+	"github.com/cipherbin/cipher-bin-cli/pkg/colors"
+	"github.com/cipherbin/cipher-bin-cli/pkg/randstring"
+	"github.com/cipherbin/cipher-bin-server/db"
+	uuid "github.com/satori/go.uuid"
 )
 
 type cipherbin struct{}
@@ -44,10 +54,47 @@ func main() {
 		decryptContainer.Refresh()
 	}
 
+	client := http.Client{Timeout: 15 * time.Second}
+	browserBaseURL := "https://cipherb.in"
+	apiBaseURL := "https://api.cipherb.in"
+
+	cipherClient, err := api.NewClient(browserBaseURL, apiBaseURL, &client)
+	if err != nil {
+		fmt.Printf("Error creating API client. Err: %v", err)
+		os.Exit(1)
+		return
+	}
+
 	encryptForm.OnSubmit = func() {
+		defer func() {
+			encryptInput.Text = ""
+			encryptContainer.Refresh()
+		}()
 		fmt.Printf("encryptInput.Text: %s\n", encryptInput.Text)
-		encryptInput.Text = ""
-		encryptContainer.Refresh()
+
+		// Create a v4 uuid for message identification and to eliminate
+		// almost any chance of stumbling upon the url
+		uuidv4 := uuid.NewV4().String()
+
+		// Generate a random 32 byte string
+		key := randstring.New(32)
+
+		// Encrypt the message using AES-256
+		encryptedMsg, err := aes256.Encrypt([]byte(encryptInput.Text), key)
+		if err != nil {
+			colors.Println(err.Error(), colors.Red)
+			os.Exit(1)
+		}
+
+		// Create one time use URL with format {host}?bin={uuidv4};{ecryption_key}
+		oneTimeURL := fmt.Sprintf("%s/msg?bin=%s;%s", browserBaseURL, uuidv4, key)
+		msg := db.Message{UUID: uuidv4, Message: encryptedMsg}
+
+		if err := cipherClient.PostMessage(&msg); err != nil {
+			os.Exit(1)
+		}
+
+		fmt.Printf("One time URL: %s\n", oneTimeURL)
 	}
 
 	decryptForm.OnSubmit = func() {
