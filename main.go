@@ -54,11 +54,11 @@ func main() {
 		decryptContainer.Refresh()
 	}
 
-	client := http.Client{Timeout: 15 * time.Second}
-	browserBaseURL := "https://cipherb.in"
+	httpclient := http.Client{Timeout: 15 * time.Second}
+	webBaseURL := "https://cipherb.in"
 	apiBaseURL := "https://api.cipherb.in"
 
-	cipherClient, err := api.NewClient(browserBaseURL, apiBaseURL, &client)
+	binClient, err := api.NewClient(webBaseURL, apiBaseURL, &httpclient)
 	if err != nil {
 		fmt.Printf("Error creating API client. Err: %v", err)
 		os.Exit(1)
@@ -87,10 +87,10 @@ func main() {
 		}
 
 		// Create one time use URL with format {host}?bin={uuidv4};{ecryption_key}
-		oneTimeURL := fmt.Sprintf("%s/msg?bin=%s;%s", browserBaseURL, uuidv4, key)
+		oneTimeURL := fmt.Sprintf("%s/msg?bin=%s;%s", webBaseURL, uuidv4, key)
 		msg := db.Message{UUID: uuidv4, Message: encryptedMsg}
 
-		if err := cipherClient.PostMessage(&msg); err != nil {
+		if err := binClient.PostMessage(&msg); err != nil {
 			os.Exit(1)
 		}
 
