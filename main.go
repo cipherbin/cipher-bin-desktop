@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"fmt"
 
 	"fyne.io/fyne"
 	"fyne.io/fyne/app"
@@ -16,55 +16,59 @@ func main() {
 
 	encryptForm := &widget.Form{BaseWidget: widget.BaseWidget{}, Items: []*widget.FormItem{}}
 	encryptForm.ExtendBaseWidget(encryptForm)
-
 	encryptInput := widget.NewMultiLineEntry()
-
-	encryptForm.AppendItem(&widget.FormItem{
-		Text:   "message",
-		Widget: encryptInput,
-	})
+	encryptForm.AppendItem(&widget.FormItem{Text: "message", Widget: encryptInput})
 
 	decryptForm := &widget.Form{BaseWidget: widget.BaseWidget{}, Items: []*widget.FormItem{}}
 	decryptForm.ExtendBaseWidget(decryptForm)
-
 	decryptInput := widget.NewMultiLineEntry()
+	decryptForm.AppendItem(&widget.FormItem{Text: "message url", Widget: decryptInput})
 
-	decryptForm.AppendItem(&widget.FormItem{
-		Text:   "message url",
-		Widget: decryptInput,
+	encryptContainer := fyne.NewContainerWithLayout(layout.NewGridLayout(1), encryptForm)
+	decryptContainer := fyne.NewContainerWithLayout(layout.NewGridLayout(1), decryptForm)
+
+	tabs := widget.NewTabContainer(&widget.TabItem{
+		Text:    "encrypt",
+		Icon:    nil,
+		Content: encryptContainer,
+	}, &widget.TabItem{
+		Text:    "decrypt",
+		Icon:    nil,
+		Content: decryptContainer,
 	})
 
-	encryptButton := widget.NewButton("encrypt", func() {
-		log.Printf("encrypt clicked: %s", encryptInput.Text)
-	})
+	tabs.OnChanged = func(tab *widget.TabItem) {
+		encryptInput.Text = ""
+		decryptInput.Text = ""
+		encryptContainer.Refresh()
+		decryptContainer.Refresh()
+	}
 
-	decryptButton := widget.NewButton("decrypt", func() {
-		log.Printf("decrypt clicked: %s", decryptInput.Text)
-	})
+	encryptForm.OnSubmit = func() {
+		fmt.Printf("encryptInput.Text: %s\n", encryptInput.Text)
+		encryptInput.Text = ""
+		encryptContainer.Refresh()
+	}
 
-	encryptContainer := fyne.NewContainerWithLayout(layout.NewGridLayout(1), encryptForm, encryptButton)
-	decryptContainer := fyne.NewContainerWithLayout(layout.NewGridLayout(1), decryptForm, decryptButton)
+	decryptForm.OnSubmit = func() {
+		fmt.Printf("decryptInput.Text: %s\n", decryptInput.Text)
+		decryptInput.Text = ""
+		decryptContainer.Refresh()
+	}
 
-	tabs := widget.NewTabContainer(
-		&widget.TabItem{
-			Text:    "encrypt",
-			Icon:    nil,
-			Content: encryptContainer,
-		},
-		&widget.TabItem{
-			Text:    "decrypt",
-			Icon:    nil,
-			Content: decryptContainer,
-		},
-	)
+	encryptForm.Refresh()
+	decryptForm.Refresh()
 
 	w.SetContent(fyne.NewContainerWithLayout(&cipherbin{}, tabs))
-
 	w.ShowAndRun()
 }
 
+// TODO:
+// - Actually submit data to the api
+// - Size things better
+
 func (c *cipherbin) MinSize(objects []fyne.CanvasObject) fyne.Size {
-	w, h := 300, 300
+	w, h := 400, 400
 	for _, o := range objects {
 		childSize := o.MinSize()
 		w += childSize.Width
