@@ -16,20 +16,31 @@ func main() {
 
 	encryptForm := &widget.Form{BaseWidget: widget.BaseWidget{}, Items: []*widget.FormItem{}}
 	encryptForm.ExtendBaseWidget(encryptForm)
+
+	encryptInput := widget.NewMultiLineEntry()
+
 	encryptForm.AppendItem(&widget.FormItem{
 		Text:   "message",
-		Widget: widget.NewEntry(),
+		Widget: encryptInput,
 	})
 
 	decryptForm := &widget.Form{BaseWidget: widget.BaseWidget{}, Items: []*widget.FormItem{}}
 	decryptForm.ExtendBaseWidget(decryptForm)
+
+	decryptInput := widget.NewMultiLineEntry()
+
 	decryptForm.AppendItem(&widget.FormItem{
 		Text:   "message url",
-		Widget: widget.NewEntry(),
+		Widget: decryptInput,
 	})
 
-	encryptButton := widget.NewButton("encrypt", func() { log.Println("encrypt clicked") })
-	decryptButton := widget.NewButton("decrypt", func() { log.Println("decrypt clicked") })
+	encryptButton := widget.NewButton("encrypt", func() {
+		log.Printf("encrypt clicked: %s", encryptInput.Text)
+	})
+
+	decryptButton := widget.NewButton("decrypt", func() {
+		log.Printf("decrypt clicked: %s", decryptInput.Text)
+	})
 
 	encryptContainer := fyne.NewContainerWithLayout(layout.NewGridLayout(1), encryptForm, encryptButton)
 	decryptContainer := fyne.NewContainerWithLayout(layout.NewGridLayout(1), decryptForm, decryptButton)
