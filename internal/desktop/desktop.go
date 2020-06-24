@@ -178,10 +178,18 @@ func (c *Client) initializeForms() {
 // initializeContainers ...
 func (c *Client) initializeContainers() {
 	c.initializeHomeContainer()
+	c.initializeWriteContainer()
+	c.initializeReadContainer()
+}
+
+func (c *Client) initializeWriteContainer() {
 	c.WriteContainer = fyne.NewContainerWithLayout(
 		layout.NewBorderLayout(widget.NewToolbar(), nil, nil, nil),
 		widget.NewTabContainer(widget.NewTabItem("Message", c.WriteForm)),
 	)
+}
+
+func (c *Client) initializeReadContainer() {
 	c.ReadContainer = fyne.NewContainerWithLayout(
 		layout.NewBorderLayout(widget.NewToolbar(), nil, nil, nil),
 		widget.NewTabContainer(widget.NewTabItem("Message", c.ReadForm)),
