@@ -168,7 +168,7 @@ func (c *Client) initializeForms() {
 		OnSubmit: c.writeSubmit,
 	}
 	c.ReadForm = &widget.Form{
-		Items:    []*widget.FormItem{{Text: "Message", Widget: c.ReadInput}},
+		Items:    []*widget.FormItem{{Text: "URL", Widget: c.ReadInput}},
 		OnCancel: c.resetInputs,
 		OnSubmit: c.readSubmit,
 	}
