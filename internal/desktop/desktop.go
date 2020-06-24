@@ -2,11 +2,12 @@ package desktop
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
 	"fyne.io/fyne"
+	"fyne.io/fyne/app"
 	"fyne.io/fyne/canvas"
 	"fyne.io/fyne/layout"
 	"fyne.io/fyne/theme"
@@ -36,13 +37,44 @@ type Client struct {
 	ReadInput      *widget.Entry
 	WriteForm      *widget.Form
 	ReadForm       *widget.Form
+	HomeWindow     *widget.Box
 	WriteContainer *fyne.Container
 	ReadContainer  *fyne.Container
 	Tabs           *widget.TabContainer
 }
 
-// ResetInputs ...
-func (c *Client) ResetInputs() {
+// NewClient ...
+func NewClient(httpClient *http.Client) (*Client, error) {
+	dc := new(Client)
+	dc.App = app.NewWithID("cipherb.in.desktop")
+	dc.App.SetIcon(theme.FyneLogo())
+	w := dc.App.NewWindow("cipherb.in")
+	dc.Window = &w
+
+	ac, err := api.NewClient(WebBaseURL, APIBaseURL, httpClient)
+	if err != nil {
+		return nil, err
+	}
+	dc.APIClient = ac
+
+	dc.WriteInput = widget.NewMultiLineEntry()
+	dc.ReadInput = widget.NewMultiLineEntry()
+	dc.initializeForms()
+	dc.initializeContainers()
+	dc.initializeTabs()
+	dc.initializeWindow()
+
+	return dc, nil
+}
+
+// Run ...
+func (c *Client) Run() {
+	win := *c.Window
+	win.ShowAndRun()
+}
+
+// resetInputs ...
+func (c *Client) resetInputs() {
 	c.clearInputs()
 	c.refreshInputs()
 }
@@ -57,10 +89,10 @@ func (c *Client) refreshInputs() {
 	c.ReadInput.Refresh()
 }
 
-// WriteSubmit ...
-func (c *Client) WriteSubmit() {
+// writeSubmit ...
+func (c *Client) writeSubmit() {
 	// Ensure we clear and refresh inputs at the end
-	defer func() { c.ResetInputs() }()
+	defer func() { c.resetInputs() }()
 
 	uuidv4 := uuid.NewV4().String()
 	key := randstring.New(32)
@@ -86,14 +118,13 @@ func (c *Client) WriteSubmit() {
 	// TODO: write to screen
 }
 
-// ReadSubmit ...
-func (c *Client) ReadSubmit() {
-	defer func() { c.ResetInputs() }()
+// readSubmit ...
+func (c *Client) readSubmit() {
+	defer func() { c.resetInputs() }()
 
 	url := c.ReadInput.Text
 	if !validURL(url, WebBaseURL) {
 		fmt.Println("sorry, this message has either already been viewed and destroyed or it never existed at all")
-		os.Exit(1)
 		return
 	}
 
@@ -104,7 +135,6 @@ func (c *Client) ReadSubmit() {
 	encryptedMsg, err := c.APIClient.GetMessage(url)
 	if err != nil {
 		fmt.Printf("error: failed to fetch message: %+v\n", err)
-		os.Exit(1)
 		return
 	}
 
@@ -134,22 +164,23 @@ func (c *Client) ReadSubmit() {
 
 }
 
-// InitializeForms ...
-func (c *Client) InitializeForms() {
+// initializeForms ...
+func (c *Client) initializeForms() {
 	c.WriteForm = &widget.Form{
 		Items:    []*widget.FormItem{{Text: "Message", Widget: c.WriteInput}},
-		OnCancel: c.ResetInputs,
-		OnSubmit: c.WriteSubmit,
+		OnCancel: c.resetInputs,
+		OnSubmit: c.writeSubmit,
 	}
 	c.ReadForm = &widget.Form{
 		Items:    []*widget.FormItem{{Text: "Message", Widget: c.ReadInput}},
-		OnCancel: c.ResetInputs,
-		OnSubmit: c.ReadSubmit,
+		OnCancel: c.resetInputs,
+		OnSubmit: c.readSubmit,
 	}
 }
 
-// InitializeContainers ...
-func (c *Client) InitializeContainers() {
+// initializeContainers ...
+func (c *Client) initializeContainers() {
+	c.initializeHomeContainer()
 	c.WriteContainer = fyne.NewContainerWithLayout(
 		layout.NewBorderLayout(widget.NewToolbar(), nil, nil, nil),
 		widget.NewTabContainer(widget.NewTabItem("Message", c.WriteForm)),
@@ -160,38 +191,11 @@ func (c *Client) InitializeContainers() {
 	)
 }
 
-// InitializeTabs ...
-func (c *Client) InitializeTabs() {
-	c.Tabs = widget.NewTabContainer(
-		widget.NewTabItemWithIcon("Welcome", theme.HomeIcon(), c.homeWindow()),
-		widget.NewTabItemWithIcon("Write Message", theme.DocumentCreateIcon(), c.WriteContainer),
-		widget.NewTabItemWithIcon("Read Message", theme.FolderOpenIcon(), c.ReadContainer),
-	)
-	c.Tabs.SetTabLocation(widget.TabLocationLeading)
-	c.Tabs.SelectTabIndex(c.App.Preferences().Int(PrefCurrentTab))
-	c.Tabs.OnChanged = func(tab *widget.TabItem) { c.ResetInputs() }
-}
-
-// InitializeWindow ...
-func (c *Client) InitializeWindow() {
-	win := *c.Window
-	win.SetContent(c.Tabs)
-	win.ShowAndRun()
-	c.App.Preferences().SetInt(PrefCurrentTab, c.Tabs.CurrentTabIndex())
-
-	win.SetContent(
-		fyne.NewContainerWithLayout(
-			layout.NewBorderLayout(widget.NewToolbar(), nil, nil, nil),
-			c.Tabs,
-		),
-	)
-}
-
-func (c *Client) homeWindow() fyne.CanvasObject {
+func (c *Client) initializeHomeContainer() {
 	logo := canvas.NewImageFromResource(data.FyneScene)
 	logo.SetMinSize(fyne.NewSize(228, 167))
 
-	return widget.NewVBox(
+	c.HomeWindow = widget.NewVBox(
 		layout.NewSpacer(),
 		widget.NewLabelWithStyle(
 			"welcome to cipherb.in",
@@ -218,6 +222,32 @@ func (c *Client) homeWindow() fyne.CanvasObject {
 					c.App.Settings().SetTheme(theme.LightTheme())
 				}),
 			),
+		),
+	)
+}
+
+// initializeTabs ...
+func (c *Client) initializeTabs() {
+	c.Tabs = widget.NewTabContainer(
+		widget.NewTabItemWithIcon("Welcome", theme.HomeIcon(), c.HomeWindow),
+		widget.NewTabItemWithIcon("Write Message", theme.DocumentCreateIcon(), c.WriteContainer),
+		widget.NewTabItemWithIcon("Read Message", theme.FolderOpenIcon(), c.ReadContainer),
+	)
+	c.Tabs.SetTabLocation(widget.TabLocationLeading)
+	c.Tabs.SelectTabIndex(c.App.Preferences().Int(PrefCurrentTab))
+	c.Tabs.OnChanged = func(tab *widget.TabItem) { c.resetInputs() }
+}
+
+// initializeWindow ...
+func (c *Client) initializeWindow() {
+	win := *c.Window
+	win.SetContent(c.Tabs)
+	win.ShowAndRun()
+	c.App.Preferences().SetInt(PrefCurrentTab, c.Tabs.CurrentTabIndex())
+	win.SetContent(
+		fyne.NewContainerWithLayout(
+			layout.NewBorderLayout(widget.NewToolbar(), nil, nil, nil),
+			c.Tabs,
 		),
 	)
 }
