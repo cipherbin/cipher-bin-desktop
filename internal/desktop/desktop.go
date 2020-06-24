@@ -156,7 +156,6 @@ func (c *Client) readSubmit() {
 		fmt.Printf("error: we had trouble decrypting your message: %+v", err)
 		return
 	}
-
 	fmt.Println(plainTextMsg)
 	// TODO: write to screen
 }

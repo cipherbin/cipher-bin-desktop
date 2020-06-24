@@ -18,3 +18,7 @@
 <br />
 
 You can find instructions on using the Desktop app at the bottom of the this `README.md` or check out [the docs](https://cipherb.in/desktop).
+
+Currently still a work in progress, but getting closer to an MVP:
+
+![cipherbin desktop](cipherbin-desktop.png)
