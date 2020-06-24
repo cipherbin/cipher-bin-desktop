@@ -92,12 +92,11 @@ func (c *Client) refreshInputs() {
 // writeSubmit ...
 func (c *Client) writeSubmit() {
 	// Ensure we clear and refresh inputs at the end
-	defer func() { c.resetInputs() }()
+	defer c.resetInputs()
 
 	uuidv4 := uuid.NewV4().String()
 	key := randstring.New(32)
 
-	// Encrypt the message using AES-256
 	encryptedMsg, err := aes256.Encrypt([]byte(c.WriteInput.Text), key)
 	if err != nil {
 		colors.Println(err.Error(), colors.Red)
@@ -120,7 +119,7 @@ func (c *Client) writeSubmit() {
 
 // readSubmit ...
 func (c *Client) readSubmit() {
-	defer func() { c.resetInputs() }()
+	defer c.resetInputs()
 
 	url := c.ReadInput.Text
 	if !validURL(url, WebBaseURL) {
@@ -152,7 +151,6 @@ func (c *Client) readSubmit() {
 		return
 	}
 
-	// Decrypt the message returned from GetMessage
 	plainTextMsg, err := aes256.Decrypt(encryptedMsg.Message, key)
 	if err != nil {
 		fmt.Printf("error: we had trouble decrypting your message: %+v", err)
@@ -161,7 +159,6 @@ func (c *Client) readSubmit() {
 
 	fmt.Println(plainTextMsg)
 	// TODO: write to screen
-
 }
 
 // initializeForms ...
@@ -215,12 +212,8 @@ func (c *Client) initializeHomeContainer() {
 			"Theme",
 			fyne.NewContainerWithLayout(
 				layout.NewGridLayout(2),
-				widget.NewButton("Dark", func() {
-					c.App.Settings().SetTheme(theme.DarkTheme())
-				}),
-				widget.NewButton("Light", func() {
-					c.App.Settings().SetTheme(theme.LightTheme())
-				}),
+				widget.NewButton("Dark", func() { c.App.Settings().SetTheme(theme.DarkTheme()) }),
+				widget.NewButton("Light", func() { c.App.Settings().SetTheme(theme.LightTheme()) }),
 			),
 		),
 	)
