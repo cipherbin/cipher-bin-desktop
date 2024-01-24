@@ -6,17 +6,17 @@ import (
 	"net/url"
 	"strings"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/app"
-	"fyne.io/fyne/canvas"
-	"fyne.io/fyne/layout"
-	"fyne.io/fyne/theme"
-	"fyne.io/fyne/widget"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/cmd/fyne_demo/data"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 	"github.com/cipherbin/cipher-bin-cli/pkg/aes256"
 	"github.com/cipherbin/cipher-bin-cli/pkg/api"
-	"github.com/cipherbin/cipher-bin-cli/pkg/colors"
 	"github.com/cipherbin/cipher-bin-cli/pkg/randstring"
-	"github.com/cipherbin/cipher-bin-desktop/example/fyne_demo/data"
 	"github.com/cipherbin/cipher-bin-server/db"
 	uuid "github.com/satori/go.uuid"
 )
@@ -37,10 +37,10 @@ type Client struct {
 	ReadInput      *widget.Entry
 	WriteForm      *widget.Form
 	ReadForm       *widget.Form
-	HomeWindow     *widget.Box
+	HomeWindow     *fyne.Container
 	WriteContainer *fyne.Container
 	ReadContainer  *fyne.Container
-	Tabs           *widget.TabContainer
+	Tabs           *container.AppTabs
 }
 
 // NewClient ...
@@ -99,7 +99,7 @@ func (c *Client) writeSubmit() {
 
 	encryptedMsg, err := aes256.Encrypt([]byte(c.WriteInput.Text), key)
 	if err != nil {
-		colors.Println(err.Error(), colors.Red)
+		// TODO: print to user. Error too?
 		fmt.Println("were sorry, there was an error encrypting your message")
 		return
 	}
@@ -123,27 +123,29 @@ func (c *Client) readSubmit() {
 
 	url := c.ReadInput.Text
 	if !validURL(url, WebBaseURL) {
+		// TODO: print to user
 		fmt.Println("sorry, this message has either already been viewed and destroyed or it never existed at all")
 		return
 	}
 
-	// If we've gotten here, the open in browser flag was not provided, so we
-	// replace the browser url with the api url to fetch the message here
+	// Replace the browser url with the api url to fetch the message.
 	url = strings.Replace(url, WebBaseURL, APIBaseURL, -1)
+	urlParts := strings.Split(url, ";")
+	if len(urlParts) != 2 {
+		// TODO: print to user
+		fmt.Println("Sorry, that seems to be an invalid cipherbin link")
+	}
+	apiURL := urlParts[0] // uuid only
 
-	encryptedMsg, err := c.APIClient.GetMessage(url)
+	encryptedMsg, err := c.APIClient.GetMessage(apiURL)
 	if err != nil {
-		fmt.Printf("error: failed to fetch message: %+v\n", err)
+		fmt.Printf("error: failed to fetch message: %+v", err)
 		return
 	}
 
-	var key string
-
 	// Ensure we have what looks like an AES key and set the key var if so
-	urlParts := strings.Split(url, ";")
-	if len(urlParts) == 2 {
-		key = urlParts[1]
-	}
+	// Set key to whatever the user has provided for the AES key.
+	key := urlParts[1]
 
 	// Length of urlParts != 2. In other words, if it's an invalid link.
 	if key == "" {
@@ -153,6 +155,7 @@ func (c *Client) readSubmit() {
 
 	plainTextMsg, err := aes256.Decrypt(encryptedMsg.Message, key)
 	if err != nil {
+		// TODO: print to user
 		fmt.Printf("error: we had trouble decrypting your message: %+v", err)
 		return
 	}
@@ -182,32 +185,32 @@ func (c *Client) initializeContainers() {
 }
 
 func (c *Client) initializeWriteContainer() {
-	c.WriteContainer = fyne.NewContainerWithLayout(
+	c.WriteContainer = container.New(
 		layout.NewBorderLayout(widget.NewToolbar(), nil, nil, nil),
-		widget.NewTabContainer(widget.NewTabItem("Message", c.WriteForm)),
+		container.NewAppTabs(container.NewTabItem("Message", c.WriteForm)),
 	)
 }
 
 func (c *Client) initializeReadContainer() {
-	c.ReadContainer = fyne.NewContainerWithLayout(
+	c.ReadContainer = container.New(
 		layout.NewBorderLayout(widget.NewToolbar(), nil, nil, nil),
-		widget.NewTabContainer(widget.NewTabItem("Message", c.ReadForm)),
+		container.NewAppTabs(container.NewTabItem("Message", c.ReadForm)),
 	)
 }
 
 func (c *Client) initializeHomeContainer() {
-	logo := canvas.NewImageFromResource(data.FyneScene)
+	logo := canvas.NewImageFromResource(data.FyneLogo)
 	logo.SetMinSize(fyne.NewSize(228, 167))
 
-	c.HomeWindow = widget.NewVBox(
+	c.HomeWindow = container.NewVBox(
 		layout.NewSpacer(),
 		widget.NewLabelWithStyle(
 			"welcome to cipherb.in",
 			fyne.TextAlignCenter,
 			fyne.TextStyle{Bold: true},
 		),
-		widget.NewHBox(layout.NewSpacer(), logo, layout.NewSpacer()),
-		widget.NewHBox(
+		container.NewHBox(layout.NewSpacer(), logo, layout.NewSpacer()),
+		container.NewHBox(
 			layout.NewSpacer(),
 			widget.NewHyperlink("cipherb.in", parseURL("https://cipherb.in/")),
 			widget.NewLabel("-"),
@@ -215,9 +218,13 @@ func (c *Client) initializeHomeContainer() {
 			layout.NewSpacer(),
 		),
 		layout.NewSpacer(),
-		widget.NewGroup(
-			"Theme",
-			fyne.NewContainerWithLayout(
+		container.NewHBox(
+			widget.NewLabelWithStyle(
+				"Theme",
+				fyne.TextAlignCenter,
+				fyne.TextStyle{Bold: true},
+			),
+			container.New(
 				layout.NewGridLayout(2),
 				widget.NewButton("Dark", func() { c.App.Settings().SetTheme(theme.DarkTheme()) }),
 				widget.NewButton("Light", func() { c.App.Settings().SetTheme(theme.LightTheme()) }),
@@ -228,14 +235,14 @@ func (c *Client) initializeHomeContainer() {
 
 // initializeTabs ...
 func (c *Client) initializeTabs() {
-	c.Tabs = widget.NewTabContainer(
-		widget.NewTabItemWithIcon("Welcome", theme.HomeIcon(), c.HomeWindow),
-		widget.NewTabItemWithIcon("Write Message", theme.DocumentCreateIcon(), c.WriteContainer),
-		widget.NewTabItemWithIcon("Read Message", theme.FolderOpenIcon(), c.ReadContainer),
+	c.Tabs = container.NewAppTabs(
+		container.NewTabItemWithIcon("Welcome", theme.HomeIcon(), c.HomeWindow),
+		container.NewTabItemWithIcon("Write Message", theme.DocumentCreateIcon(), c.WriteContainer),
+		container.NewTabItemWithIcon("Read Message", theme.FolderOpenIcon(), c.ReadContainer),
 	)
-	c.Tabs.SetTabLocation(widget.TabLocationLeading)
-	c.Tabs.SelectTabIndex(c.App.Preferences().Int(PrefCurrentTab))
-	c.Tabs.OnChanged = func(tab *widget.TabItem) { c.resetInputs() }
+	c.Tabs.SetTabLocation(container.TabLocationLeading)
+	c.Tabs.SelectIndex(c.App.Preferences().Int(PrefCurrentTab))
+	c.Tabs.OnSelected = func(tab *container.TabItem) { c.resetInputs() }
 }
 
 // initializeWindow ...
@@ -245,7 +252,7 @@ func (c *Client) initializeWindow() {
 	win.ShowAndRun()
 	c.App.Preferences().SetInt(PrefCurrentTab, c.Tabs.CurrentTabIndex())
 	win.SetContent(
-		fyne.NewContainerWithLayout(
+		container.New(
 			layout.NewBorderLayout(widget.NewToolbar(), nil, nil, nil),
 			c.Tabs,
 		),
