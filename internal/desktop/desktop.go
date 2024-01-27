@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"fmt"
+	"image/color"
 	"net/http"
 	"net/url"
 	"strings"
@@ -21,6 +22,8 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+// TODO: look into notifications
+
 // API endpoint constants
 const (
 	WebBaseURL     = "https://cipherb.in"
@@ -28,68 +31,67 @@ const (
 	PrefCurrentTab = "currentTab"
 )
 
-// Client ...
+// Client defines the main desktop client structure.
 type Client struct {
-	App            fyne.App
-	Window         *fyne.Window
-	APIClient      *api.Client
-	WriteInput     *widget.Entry
-	ReadInput      *widget.Entry
-	WriteForm      *widget.Form
-	ReadForm       *widget.Form
-	HomeWindow     *fyne.Container
-	WriteContainer *fyne.Container
-	ReadContainer  *fyne.Container
-	Tabs           *container.AppTabs
+	app            fyne.App
+	window         *fyne.Window
+	apiClient      *api.Client
+	writeInput     *widget.Entry
+	readInput      *widget.Entry
+	writeForm      *widget.Form
+	readForm       *widget.Form
+	homeWindow     *fyne.Container
+	writeContainer *fyne.Container
+	readContainer  *fyne.Container
+	tabs           *container.AppTabs
 }
 
-// NewClient ...
+// NewClient sets up and initializes a desktop client using the provided http client.
 func NewClient(httpClient *http.Client) (*Client, error) {
-	dc := new(Client)
-	dc.App = app.NewWithID("cipherb.in.desktop")
-	dc.App.SetIcon(theme.FyneLogo())
-	w := dc.App.NewWindow("cipherb.in")
-	dc.Window = &w
+	c := Client{
+		app: app.NewWithID("cipherb.in.desktop"),
+	}
+	c.app.SetIcon(theme.FyneLogo())
+	w := c.app.NewWindow("cipherb.in")
+	c.window = &w
 
 	ac, err := api.NewClient(WebBaseURL, APIBaseURL, httpClient)
 	if err != nil {
 		return nil, err
 	}
-	dc.APIClient = ac
+	c.apiClient = ac
 
-	dc.WriteInput = widget.NewMultiLineEntry()
-	dc.ReadInput = widget.NewMultiLineEntry()
-	dc.initializeForms()
-	dc.initializeContainers()
-	dc.initializeTabs()
-	dc.initializeWindow()
+	c.writeInput = widget.NewMultiLineEntry()
+	c.readInput = widget.NewMultiLineEntry()
+	c.initializeForms()
+	c.initializeContainers()
+	c.initializeTabs()
+	c.initializeWindow()
 
-	return dc, nil
+	return &c, nil
 }
 
-// Run ...
+// Run runs the desktop application.
 func (c *Client) Run() {
-	win := *c.Window
+	win := *c.window
 	win.ShowAndRun()
 }
 
-// resetInputs ...
 func (c *Client) resetInputs() {
 	c.clearInputs()
 	c.refreshInputs()
 }
 
 func (c *Client) clearInputs() {
-	c.WriteInput.Text = ""
-	c.ReadInput.Text = ""
+	c.writeInput.Text = ""
+	c.readInput.Text = ""
 }
 
 func (c *Client) refreshInputs() {
-	c.WriteInput.Refresh()
-	c.ReadInput.Refresh()
+	c.writeInput.Refresh()
+	c.readInput.Refresh()
 }
 
-// writeSubmit ...
 func (c *Client) writeSubmit() {
 	// Ensure we clear and refresh inputs at the end
 	defer c.resetInputs()
@@ -97,7 +99,7 @@ func (c *Client) writeSubmit() {
 	uuidv4 := uuid.NewV4().String()
 	key := randstring.New(32)
 
-	encryptedMsg, err := aes256.Encrypt([]byte(c.WriteInput.Text), key)
+	encryptedMsg, err := aes256.Encrypt([]byte(c.writeInput.Text), key)
 	if err != nil {
 		// TODO: print to user. Error too?
 		fmt.Println("were sorry, there was an error encrypting your message")
@@ -108,20 +110,23 @@ func (c *Client) writeSubmit() {
 	url := fmt.Sprintf("%s/msg?bin=%s;%s", WebBaseURL, uuidv4, key)
 	msg := db.Message{UUID: uuidv4, Message: encryptedMsg}
 
-	if err := c.APIClient.PostMessage(&msg); err != nil {
+	if err := c.apiClient.PostMessage(&msg); err != nil {
 		fmt.Println("were sorry, there was an error sending your message to cipherb.in")
 		return
 	}
 
 	fmt.Printf("One time URL: %s\n", url)
-	// TODO: write to screen
+
+	urlText := canvas.NewText(url, color.White)
+	content := container.New(layout.NewCenterLayout(), urlText)
+	c.writeContainer.Add(content)
+	// c.WriteContainer.Remove(content)
 }
 
-// readSubmit ...
 func (c *Client) readSubmit() {
 	defer c.resetInputs()
 
-	url := c.ReadInput.Text
+	url := c.readInput.Text
 	if !validURL(url, WebBaseURL) {
 		// TODO: print to user
 		fmt.Println("sorry, this message has either already been viewed and destroyed or it never existed at all")
@@ -137,7 +142,7 @@ func (c *Client) readSubmit() {
 	}
 	apiURL := urlParts[0] // uuid only
 
-	encryptedMsg, err := c.APIClient.GetMessage(apiURL)
+	encryptedMsg, err := c.apiClient.GetMessage(apiURL)
 	if err != nil {
 		fmt.Printf("error: failed to fetch message: %+v", err)
 		return
@@ -149,7 +154,8 @@ func (c *Client) readSubmit() {
 
 	// Length of urlParts != 2. In other words, if it's an invalid link.
 	if key == "" {
-		fmt.Printf("error: it seems you have an invalid link: %+v", err)
+		// TODO: print to user
+		fmt.Println("error: it seems you have an invalid link")
 		return
 	}
 
@@ -160,24 +166,26 @@ func (c *Client) readSubmit() {
 		return
 	}
 	fmt.Println(plainTextMsg)
-	// TODO: write to screen
+
+	text1 := canvas.NewText(plainTextMsg, color.White)
+	content := container.New(layout.NewCenterLayout(), text1)
+	c.readContainer.Add(content)
+	// c.ReadContainer.Remove(content)
 }
 
-// initializeForms ...
 func (c *Client) initializeForms() {
-	c.WriteForm = &widget.Form{
-		Items:    []*widget.FormItem{{Text: "Message", Widget: c.WriteInput}},
+	c.writeForm = &widget.Form{
+		Items:    []*widget.FormItem{{Text: "Message", Widget: c.writeInput}},
 		OnCancel: c.resetInputs,
 		OnSubmit: c.writeSubmit,
 	}
-	c.ReadForm = &widget.Form{
-		Items:    []*widget.FormItem{{Text: "URL", Widget: c.ReadInput}},
+	c.readForm = &widget.Form{
+		Items:    []*widget.FormItem{{Text: "URL", Widget: c.readInput}},
 		OnCancel: c.resetInputs,
 		OnSubmit: c.readSubmit,
 	}
 }
 
-// initializeContainers ...
 func (c *Client) initializeContainers() {
 	c.initializeHomeContainer()
 	c.initializeWriteContainer()
@@ -185,16 +193,16 @@ func (c *Client) initializeContainers() {
 }
 
 func (c *Client) initializeWriteContainer() {
-	c.WriteContainer = container.New(
+	c.writeContainer = container.New(
 		layout.NewBorderLayout(widget.NewToolbar(), nil, nil, nil),
-		container.NewAppTabs(container.NewTabItem("Message", c.WriteForm)),
+		container.NewAppTabs(container.NewTabItem("Message", c.writeForm)),
 	)
 }
 
 func (c *Client) initializeReadContainer() {
-	c.ReadContainer = container.New(
+	c.readContainer = container.New(
 		layout.NewBorderLayout(widget.NewToolbar(), nil, nil, nil),
-		container.NewAppTabs(container.NewTabItem("Message", c.ReadForm)),
+		container.NewAppTabs(container.NewTabItem("Message", c.readForm)),
 	)
 }
 
@@ -202,7 +210,7 @@ func (c *Client) initializeHomeContainer() {
 	logo := canvas.NewImageFromResource(data.FyneLogo)
 	logo.SetMinSize(fyne.NewSize(228, 167))
 
-	c.HomeWindow = container.NewVBox(
+	c.homeWindow = container.NewVBox(
 		layout.NewSpacer(),
 		widget.NewLabelWithStyle(
 			"welcome to cipherb.in",
@@ -226,35 +234,33 @@ func (c *Client) initializeHomeContainer() {
 			),
 			container.New(
 				layout.NewGridLayout(2),
-				widget.NewButton("Dark", func() { c.App.Settings().SetTheme(theme.DarkTheme()) }),
-				widget.NewButton("Light", func() { c.App.Settings().SetTheme(theme.LightTheme()) }),
+				widget.NewButton("Dark", func() { c.app.Settings().SetTheme(theme.DarkTheme()) }),
+				widget.NewButton("Light", func() { c.app.Settings().SetTheme(theme.LightTheme()) }),
 			),
 		),
 	)
 }
 
-// initializeTabs ...
 func (c *Client) initializeTabs() {
-	c.Tabs = container.NewAppTabs(
-		container.NewTabItemWithIcon("Welcome", theme.HomeIcon(), c.HomeWindow),
-		container.NewTabItemWithIcon("Write Message", theme.DocumentCreateIcon(), c.WriteContainer),
-		container.NewTabItemWithIcon("Read Message", theme.FolderOpenIcon(), c.ReadContainer),
+	c.tabs = container.NewAppTabs(
+		container.NewTabItemWithIcon("Welcome", theme.HomeIcon(), c.homeWindow),
+		container.NewTabItemWithIcon("Write Message", theme.DocumentCreateIcon(), c.writeContainer),
+		container.NewTabItemWithIcon("Read Message", theme.FolderOpenIcon(), c.readContainer),
 	)
-	c.Tabs.SetTabLocation(container.TabLocationLeading)
-	c.Tabs.SelectIndex(c.App.Preferences().Int(PrefCurrentTab))
-	c.Tabs.OnSelected = func(tab *container.TabItem) { c.resetInputs() }
+	c.tabs.SetTabLocation(container.TabLocationLeading)
+	c.tabs.SelectIndex(c.app.Preferences().Int(PrefCurrentTab))
+	c.tabs.OnSelected = func(tab *container.TabItem) { c.resetInputs() }
 }
 
-// initializeWindow ...
 func (c *Client) initializeWindow() {
-	win := *c.Window
-	win.SetContent(c.Tabs)
+	win := *c.window
+	win.SetContent(c.tabs)
 	win.ShowAndRun()
-	c.App.Preferences().SetInt(PrefCurrentTab, c.Tabs.CurrentTabIndex())
+	c.app.Preferences().SetInt(PrefCurrentTab, c.tabs.SelectedIndex())
 	win.SetContent(
 		container.New(
 			layout.NewBorderLayout(widget.NewToolbar(), nil, nil, nil),
-			c.Tabs,
+			c.tabs,
 		),
 	)
 }
