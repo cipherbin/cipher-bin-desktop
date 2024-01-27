@@ -15,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/atotto/clipboard"
 	"github.com/cipherbin/cipher-bin-cli/pkg/aes256"
 	"github.com/cipherbin/cipher-bin-cli/pkg/api"
 	"github.com/cipherbin/cipher-bin-cli/pkg/randstring"
@@ -33,17 +34,19 @@ const (
 
 // Client defines the main desktop client structure.
 type Client struct {
-	app            fyne.App
-	window         *fyne.Window
-	apiClient      *api.Client
-	writeInput     *widget.Entry
-	readInput      *widget.Entry
-	writeForm      *widget.Form
-	readForm       *widget.Form
-	homeWindow     *fyne.Container
-	writeContainer *fyne.Container
-	readContainer  *fyne.Container
-	tabs           *container.AppTabs
+	app                 fyne.App
+	window              *fyne.Window
+	apiClient           *api.Client
+	writeInput          *widget.Entry
+	readInput           *widget.Entry
+	writeForm           *widget.Form
+	readForm            *widget.Form
+	homeWindow          *fyne.Container
+	writeContainer      *fyne.Container
+	wCurrentTextDisplay *fyne.Container
+	readContainer       *fyne.Container
+	rCurrentTextDisplay *fyne.Container
+	tabs                *container.AppTabs
 }
 
 // NewClient sets up and initializes a desktop client using the provided http client.
@@ -92,6 +95,30 @@ func (c *Client) refreshInputs() {
 	c.readInput.Refresh()
 }
 
+// Clear current writeContainer text content
+func (c *Client) clearWriteText() {
+	c.writeContainer.Remove(c.wCurrentTextDisplay)
+	c.writeContainer.Refresh()
+}
+
+// Add and display (refresh) current write container text
+func (c *Client) addAndDisplayWriteText() {
+	c.writeContainer.Add(c.wCurrentTextDisplay)
+	c.writeContainer.Refresh()
+}
+
+// Clear current readContainer text content
+func (c *Client) clearReadText() {
+	c.readContainer.Remove(c.rCurrentTextDisplay)
+	c.readContainer.Refresh()
+}
+
+// Add and display (refresh) current write container text
+func (c *Client) addAndDisplayReadText() {
+	c.readContainer.Add(c.rCurrentTextDisplay)
+	c.readContainer.Refresh()
+}
+
 func (c *Client) writeSubmit() {
 	// Ensure we clear and refresh inputs at the end
 	defer c.resetInputs()
@@ -115,12 +142,27 @@ func (c *Client) writeSubmit() {
 		return
 	}
 
+	// TODO: remove eventually
 	fmt.Printf("One time URL: %s\n", url)
 
+	// Copy the one time url to the user's clipboard. Using nice little package here
+	// that does the work around ensuring this works on OSX, Windows, Linux/Unix
+	if err := clipboard.WriteAll(url); err != nil {
+		fmt.Println("failed to copy one time URL to buffer")
+	}
+
+	// Clear the current writeSubmit display text
+	c.clearWriteText()
+
+	// Create one-time URL Text, copy-buffer Text, and combine into one container
 	urlText := canvas.NewText(url, color.White)
-	content := container.New(layout.NewCenterLayout(), urlText)
-	c.writeContainer.Add(content)
-	// c.WriteContainer.Remove(content)
+	urlContent := container.New(layout.NewCenterLayout(), urlText)
+	copyText := canvas.NewText("This time URL has been copied to your clipboard", color.White)
+	copyContent := container.New(layout.NewCenterLayout(), copyText)
+	c.wCurrentTextDisplay = container.New(layout.NewGridLayoutWithRows(2), urlContent, copyContent)
+
+	// Set and display the writeSubmit result text
+	c.addAndDisplayWriteText()
 }
 
 func (c *Client) readSubmit() {
@@ -167,10 +209,15 @@ func (c *Client) readSubmit() {
 	}
 	fmt.Println(plainTextMsg)
 
-	text1 := canvas.NewText(plainTextMsg, color.White)
-	content := container.New(layout.NewCenterLayout(), text1)
-	c.readContainer.Add(content)
-	// c.ReadContainer.Remove(content)
+	// Clear the current readSubmit display text
+	c.clearReadText()
+
+	msgText := canvas.NewText(plainTextMsg, color.White)
+	content := container.New(layout.NewCenterLayout(), msgText)
+	c.rCurrentTextDisplay = content
+
+	// Set and display the readSubmit result text
+	c.addAndDisplayReadText()
 }
 
 func (c *Client) initializeForms() {
@@ -190,6 +237,7 @@ func (c *Client) initializeContainers() {
 	c.initializeHomeContainer()
 	c.initializeWriteContainer()
 	c.initializeReadContainer()
+	c.initializeReadAndWriteText()
 }
 
 func (c *Client) initializeWriteContainer() {
@@ -239,6 +287,11 @@ func (c *Client) initializeHomeContainer() {
 			),
 		),
 	)
+}
+
+func (c *Client) initializeReadAndWriteText() {
+	c.wCurrentTextDisplay = &fyne.Container{}
+	c.rCurrentTextDisplay = &fyne.Container{}
 }
 
 func (c *Client) initializeTabs() {

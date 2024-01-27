@@ -4,6 +4,7 @@ go 1.21.6
 
 require (
 	fyne.io/fyne/v2 v2.4.3
+	github.com/atotto/clipboard v0.1.2
 	github.com/cipherbin/cipher-bin-cli v0.5.2
 	github.com/cipherbin/cipher-bin-server v0.0.0-20191226215121-4596b003b952
 	github.com/satori/go.uuid v1.2.0
